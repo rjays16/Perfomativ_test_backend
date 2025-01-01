@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use MongoDB\Laravel\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\SoftDeletes;
 
-class PersonalInformation extends Model
+class MongoPersonalInformation extends Model
 {
     use SoftDeletes;
-    
-    protected $table = 'personal_informations';
+
+    protected $connection = 'mongodb';
+    protected $collection = 'personal_informations';
     
     protected $fillable = [
         'first_name',
