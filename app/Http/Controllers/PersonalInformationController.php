@@ -34,17 +34,13 @@ class PersonalInformationController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
         ]);
 
-        // Handle image upload if present
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('profile_images', 'public');
             $validated['image'] = $imagePath;
         }
 
         try {
-            // Store in MySQL
             $sql_record = PersonalInformation::create($validated);
-            
-            // Store in MongoDB
             $mongo_record = MongoPersonalInformation::create($validated);
 
             return response()->json([
@@ -53,7 +49,6 @@ class PersonalInformationController extends Controller
                 'mongo_data' => $mongo_record
             ], 201);
         } catch (\Exception $e) {
-            // If image was uploaded but data creation failed, remove the image
             if (isset($imagePath)) {
                 Storage::disk('public')->delete($imagePath);
             }
@@ -78,66 +73,82 @@ class PersonalInformationController extends Controller
 
     public function update(Request $request, string $id): JsonResponse
     {
-        $validated = $request->validate([
-            'first_name' => 'sometimes|string|max:255',
-            'last_name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email',
-            'date_of_birth' => 'sometimes|date',
-            'state' => 'sometimes|string|max:100',
-            'city' => 'sometimes|string|max:100',
-            'country' => 'sometimes|string|max:100',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
-        ]);
-
-        // Handle image upload if present
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('profile_images', 'public');
-            $validated['image'] = $imagePath;
-        }
-
         try {
             $sql_record = PersonalInformation::findOrFail($id);
-            $mongo_record = MongoPersonalInformation::where('_id', $id)->first();
+        
+            $mongo_records = MongoPersonalInformation::where('first_name', $sql_record->first_name)
+                ->where('last_name', $sql_record->last_name)
+                ->where('email', $sql_record->email)
+                ->first();
 
-            // Remove old image if new one is uploaded
-            if (isset($imagePath) && $sql_record->image) {
-                Storage::disk('public')->delete($sql_record->image);
+            $validated = $request->validate([
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'email' => 'required|email',
+                'date_of_birth' => 'required|date',
+                'state' => 'required|string|max:100',
+                'city' => 'required|string|max:100',
+                'country' => 'required|string|max:100',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+            ]);
+
+            if ($request->hasFile('image')) {
+                if ($sql_record->image) {
+                    Storage::disk('public')->delete($sql_record->image);
+                }
+                $imagePath = $request->file('image')->store('profile_images', 'public');
+                $validated['image'] = $imagePath;
             }
 
             $sql_record->update($validated);
-            $mongo_record->update($validated);
+
+            if ($mongo_records) {
+                // If record exists, update it
+                MongoPersonalInformation::where('_id', $mongo_records->_id)
+                ->update($validated);
+            } else {
+                // If no record exists, create new one
+                MongoPersonalInformation::create($validated);
+            }
 
             return response()->json([
                 'message' => 'Record updated successfully',
                 'sql_data' => $sql_record,
-                'mongo_data' => $mongo_record
+                'mongo_data' => $mongo_records
             ]);
         } catch (\Exception $e) {
             if (isset($imagePath)) {
                 Storage::disk('public')->delete($imagePath);
             }
-            
+        
             return response()->json([
                 'message' => 'Error updating record',
                 'error' => $e->getMessage()
             ], 500);
-        }
+            }
     }
 
     public function destroy(string $id): JsonResponse
     {
         try {
             $sql_record = PersonalInformation::findOrFail($id);
-            $mongo_record = MongoPersonalInformation::where('_id', $id)->first();
-
-            // Delete image if exists
+            
+            // Find MongoDB record
+            $mongo_record = MongoPersonalInformation::where('first_name', $sql_record->first_name)
+                ->where('last_name', $sql_record->last_name)
+                ->where('email', $sql_record->email)
+                ->first();
+    
             if ($sql_record->image) {
                 Storage::disk('public')->delete($sql_record->image);
             }
-
+    
             $sql_record->delete();
-            $mongo_record->delete();
-
+            
+            if ($mongo_record) {
+                $mongo_record->delete();
+            }
+    
             return response()->json([
                 'message' => 'Record deleted successfully'
             ]);
