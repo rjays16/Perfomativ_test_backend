@@ -10,10 +10,21 @@ use Illuminate\Support\Facades\Storage;
 
 class PersonalInformationController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $sql_records = PersonalInformation::all();
-        $mongo_records = MongoPersonalInformation::all();
+        // It;s like http://localhost:8000/api/personal-information?direction=desc
+        // for fetching
+        // const response = await fetch(`${API_URL}/personal-information?direction=${sortDirection}`);
+        $sortDirection = $request->query('direction', 'asc');
+
+        $sql_records = PersonalInformation::orderBy('first_name', $sortDirection)
+            ->orderBy('last_name', $sortDirection)
+            ->get();
+
+    
+        $mongo_records = MongoPersonalInformation::orderBy('first_name', $sortDirection)
+            ->orderBy('last_name', $sortDirection)
+            ->get();
 
         return response()->json([
             'sql_data' => $sql_records,
